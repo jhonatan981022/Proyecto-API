@@ -66,8 +66,28 @@ public class UserService : IUserService
     /// </summary>
     public async Task<UserDto?> GetUserByEmailAsync(string email)
     {
-        // TODO: ESTUDIANTE - Implementar lógica
-        throw new NotImplementedException("Método pendiente de implementación por el estudiante");
+        try
+        {
+            _logger.LogInformation("Buscando usuario por email: {Email}", email);
+
+            var user = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user == null)
+            {
+                _logger.LogInformation("No se encontró usuario con email: {Email}", email);
+                return null;
+            }
+
+            var userDto = _mapper.Map<UserDto>(user);
+
+            _logger.LogInformation("Usuario encontrado con ID: {UserId}", user.UserId);
+            return userDto;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al buscar usuario por email: {Email}", email);
+            throw;
+        }
     }
 
     /// <summary>
@@ -134,8 +154,49 @@ public class UserService : IUserService
     /// </summary>
     public async Task<UserDto?> UpdateUserAsync(int userId, UpdateUserDto updateUserDto)
     {
-        // TODO: ESTUDIANTE - Implementar lógica
-        throw new NotImplementedException("Método pendiente de implementación por el estudiante");
+        try
+        {
+            _logger.LogInformation("Iniciando actualización de usuario con ID: {UserId}", userId);
+
+            // 1. Buscar el usuario existente
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+            if (user == null)
+            {
+                throw new KeyNotFoundException($"No se encontró el usuario con ID {userId}");
+            }
+
+            // 2. Si el email fue cambiado, verificar que no esté en uso por otro usuario
+            var emailFormat = updateUserDto.Email?.Trim().ToLower();
+            if (!string.IsNullOrEmpty(emailFormat) && emailFormat != user.Email)
+            {
+                var existingUserWithEmail = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Email == emailFormat && u.UserId != userId);
+                if (existingUserWithEmail != null)
+                {
+                    throw new InvalidOperationException("Ya existe otro usuario con este email");
+                }
+
+                user.Email = emailFormat;
+            }
+
+            // 3. Actualizar otros campos desde el DTO
+            user.FirstName = updateUserDto.FirstName ?? user.FirstName;
+            user.LastName = updateUserDto.LastName ?? user.LastName;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            // 4. Guardar cambios
+            _unitOfWork.Users.Update(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            _logger.LogInformation("Usuario con ID {UserId} actualizado exitosamente", userId);
+
+            // 5. Mapear a DTO y retornar
+            return _mapper.Map<UserDto>(user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al actualizar el usuario con ID {UserId}", userId);
+            throw;
+        }
     }
 
     /// <summary>
@@ -168,4 +229,85 @@ public class UserService : IUserService
         // TODO: ESTUDIANTE - Implementar lógica
         throw new NotImplementedException("Método pendiente de implementación por el estudiante");
     }
+
+    public async Task<User?> GetUserEntityByEmailAsync(string email)
+    {
+        try
+        {
+            _logger.LogInformation("Buscando entidad User por email: {Email}", email);
+
+            var user = await _unitOfWork.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user != null)
+            {
+                _logger.LogInformation("Entidad User encontrada para email: {Email}", email);
+            }
+            else
+            {
+                _logger.LogInformation("No se encontró entidad User para email: {Email}", email);
+            }
+
+            return user;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al buscar entidad User por email: {Email}", email);
+            throw;
+        }
+    }
+
+    public async Task<User?> GetUserEntityByIdAsync(int userId)
+    {
+        try
+        {
+            _logger.LogInformation("Buscando entidad User por ID: {UserId}", userId);
+
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+
+            if (user != null)
+            {
+                _logger.LogInformation("Entidad User encontrada para ID: {UserId}", userId);
+            }
+            else
+            {
+                _logger.LogInformation("No se encontró entidad User para ID: {UserId}", userId);
+            }
+
+            return user;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al buscar entidad User por ID: {UserId}", userId);
+            throw;
+        }
+    }
+
+    public async Task<bool> UpdateUserEntityAsync(User user)
+    {
+        try
+        {
+            _logger.LogInformation("Actualizando entidad User con ID: {UserId}", user.UserId);
+
+            _unitOfWork.Users.Update(user);
+            var result = await _unitOfWork.SaveChangesAsync();
+
+            if (result > 0)
+            {
+                _logger.LogInformation("Entidad User actualizada exitosamente: {UserId}", user.UserId);
+                return true;
+            }
+            else
+            {
+                _logger.LogWarning("No se pudo actualizar la entidad User: {UserId}", user.UserId);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al actualizar entidad User: {UserId}", user.UserId);
+            throw;
+        }
+    }
+
+
 }

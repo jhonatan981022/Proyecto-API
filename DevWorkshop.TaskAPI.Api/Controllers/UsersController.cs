@@ -177,8 +177,70 @@ public class UsersController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<object>), 500)]
     public async Task<ActionResult<ApiResponse<UserDto>>> UpdateUser(int id, [FromBody] UpdateUserDto updateUserDto)
     {
-        // TODO: ESTUDIANTE - Implementar lógica del controlador
-        throw new NotImplementedException("Endpoint pendiente de implementación por el estudiante");
+        try
+        {
+            // Validar el modelo de entrada
+            if (!ModelState.IsValid)
+            {
+                _logger.LogWarning("Intento de actualizar usuario con datos inválidos: {Errors}",
+                    string.Join(", ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage)));
+
+                return BadRequest(ApiResponse<UserDto>.ErrorResponse(
+                    "Datos de entrada inválidos",
+                    ModelState.Values.SelectMany(v => v.Errors.Select(e => e.ErrorMessage)).ToList()
+                ));
+            }
+
+            // Actualizar el usuario usando el servicio
+            var updatedUser = await _userService.UpdateUserAsync(id, updateUserDto);
+
+            // Crear respuesta exitosa
+            var response = ApiResponse<UserDto>.SuccessResponse(
+                updatedUser,
+                "Usuario actualizado correctamente"
+            );
+
+            _logger.LogInformation("Usuario actualizado exitosamente: {Email} con ID: {UserId}",
+                updatedUser.Email, updatedUser.UserId);
+
+            return Ok(response);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _logger.LogWarning("Usuario no encontrado al intentar actualizar: {Message}", ex.Message);
+
+            return NotFound(ApiResponse<UserDto>.ErrorResponse(
+                "Usuario no encontrado",
+                ex.Message
+            ));
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Ya existe otro usuario con este email"))
+        {
+            _logger.LogWarning("Conflicto al actualizar usuario: {Message}", ex.Message);
+
+            return Conflict(ApiResponse<UserDto>.ErrorResponse(
+                "Email duplicado",
+                ex.Message
+            ));
+        }
+        catch (AutoMapper.AutoMapperMappingException ex)
+        {
+            _logger.LogError(ex, "Error de mapeo AutoMapper al actualizar usuario con ID: {UserId}", id);
+
+            return StatusCode(500, ApiResponse<UserDto>.ErrorResponse(
+                "Error de configuración",
+                "Error en el mapeo de datos. Contacte al administrador."
+            ));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error interno al actualizar usuario con ID: {UserId}", id);
+
+            return StatusCode(500, ApiResponse<UserDto>.ErrorResponse(
+                "Error interno del servidor",
+                $"Ocurrió un error inesperado: {ex.Message}"
+            ));
+        }
     }
 
     /// <summary>
